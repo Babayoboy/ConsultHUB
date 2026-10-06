@@ -9,5 +9,5 @@ export function LogoMark({ size = 34 }) {
   )
 }
 export default function Logo({ as: T = 'div', ...p }) {
-  return <T className="logo" {...p}><LogoMark />edumen</T>
+  return <T className="logo" {...p}><LogoMark />EduMen</T>
 }
