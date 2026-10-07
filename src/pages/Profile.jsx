@@ -78,7 +78,7 @@ export default function Profile({ user, stats, credits, theme, prefs, setPrefs, 
     { i: 'card', t: 'Payment Methods', s: 'Google Pay, UPI, cards', go: () => setSheet('top') },
     { i: theme.isDark ? 'moon' : 'sun', t: 'Dark theme', s: 'Switch between light and dark', sw: theme.isDark, toggle: theme.toggle },
     { i: 'bell', t: 'Notifications', s: 'Session reminders, messages, picks for you', sw: prefs.notif, toggle: () => { if (!prefs.notif) askNotifPermission(); setPrefs({ ...prefs, notif: !prefs.notif }) } },
-    { i: 'lock', t: 'App lock', s: 'Ask for biometrics on open', sw: prefs.lock, toggle: () => setPrefs({ ...prefs, lock: !prefs.lock }) },
+    // { i: 'lock', t: 'App lock', s: 'Ask for biometrics on open', sw: prefs.lock, toggle: () => setPrefs({ ...prefs, lock: !prefs.lock }) },
     { i: 'shield', t: 'Privacy & Security', s: 'Data and account safety', go: () => notify('Privacy settings coming soon') },
     { i: 'help', t: 'Help & Support', s: 'FAQs and live chat', go: () => notify('Support: help@EduMen.app') },
   ]
@@ -121,7 +121,11 @@ export default function Profile({ user, stats, credits, theme, prefs, setPrefs, 
       </div>
       <button className="logout" onClick={onLogout}><Icon n="logout" size={18} /> Log out</button>
 
-      {sheet === 'edit' && <EditSheet user={user} notify={notify} onClose={() => setSheet(null)} onSave={(u) => { onUpdate(u); setSheet(null); notify('Profile updated') }} />}
+      {sheet === 'edit' && <EditSheet user={user} notify={notify} onClose={() => setSheet(null)} onSave={async (u) => {
+        if (!await onUpdate(u)) return
+        setSheet(null)
+        notify('Profile updated')
+      }} />}
       {sheet === 'top' && <TopUp onClose={() => setSheet(null)} onAdd={onTopUp} />}
     </div>
   )
