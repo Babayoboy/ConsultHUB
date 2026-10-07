@@ -1,9 +1,5 @@
 import { useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://hbaposumqtiwevqksajl.supabase.co'
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null
+import { supabase } from './supabase.js'
 
 export default function AuthCard({ mode, setMode, onAuth, notify }) {
   const su = mode === 'signup'
@@ -34,46 +30,40 @@ export default function AuthCard({ mode, setMode, onAuth, notify }) {
 
     try {
       if (su) {
-        // Supabase Sign Up
-        // Optional: Save user's name and role in 'data' metadata
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: {
               full_name: f.name.trim(),
-              role: f.role
+              requested_account_type: f.role,
             }
           }
         })
 
         if (error) throw error
 
-        notify('Account created successfully! Check your email if verification is required.')
-        onAuth({ name: f.name.trim(), email, role: f.role })
-
+        if (!data.session) {
+          notify(f.role === 'expert'
+            ? 'Account created. Verify your email; expert access requires approval.'
+            : 'Account created. Check your email to verify it, then log in.')
+          return
+        }
+        await onAuth(data.user)
+        if (f.role === 'expert') notify('Expert access requires approval before you can publish a profile.')
       } else {
-        // Supabase Log In
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
-          password
+          password,
         })
 
         if (error) throw error
 
-        const user = data.user
-        const meta = user.user_metadata || {}
-        
-        notify('Logged in successfully!')
-        onAuth({ 
-          name: meta.full_name || email.split('@')[0], 
-          email, 
-          role: meta.role || 'learner' 
-        })
+        await onAuth(data.user)
       }
     } catch (error) {
-      setErr({ pw: error.message })
-      notify('Authentication failed. Check your inputs.')
+      setErr({ pw: error.message || 'Authentication failed.' })
+      notify(error.message || 'Authentication failed.')
     } finally {
       setLoading(false)
     }
@@ -91,11 +81,12 @@ export default function AuthCard({ mode, setMode, onAuth, notify }) {
       notify('Authentication is not configured yet. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.')
       return
     }
-    const { error } = await supabase.auth.resetPasswordForEmail(email)
-    if (error) {
-      notify(error.message)
-    } else {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email)
+      if (error) throw error
       notify('Password reset link sent to your email!')
+    } catch (error) {
+      notify(error.message || 'Could not send the password reset email.')
     }
   }
 

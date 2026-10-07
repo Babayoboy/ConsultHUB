@@ -10,8 +10,20 @@ import UserAvatar from './components/UserAvatar.jsx'
 import Profile from './pages/Profile.jsx'
 import NotifSheet from './components/NotifSheet.jsx'
 import { SESSIONS, THREADS, EXPERTS, REPLIES, MIN, fmtWhen, fmtLeft, slotToTs } from './data.js'
+import { supabase } from './supabase.js'
 
 const NAV = [['home', 'Home', 'home'], ['sessions', 'Sessions', 'calendar'], ['messages', 'Messages', 'chat'], ['saved', 'Saved', 'bookmark'], ['profile', 'Profile', 'user']]
+
+function parseAvatar(value) {
+  if (!value) return undefined
+  const avatar = typeof value === 'string' ? JSON.parse(value) : value
+  if (!avatar || typeof avatar !== 'object' || Array.isArray(avatar)) {
+    throw new Error('The saved avatar has an invalid format.')
+  }
+  if (avatar.type === 'photo' && typeof avatar.src === 'string') return avatar
+  if (avatar.type === 'emoji' && typeof avatar.e === 'string' && typeof avatar.bg === 'string') return avatar
+  throw new Error('The saved avatar has an invalid format.')
+}
 
 export default function Shell({ user, theme, notify, onLogout, onUpdate }) {
   const [tab, setTab] = useState('home')
@@ -25,9 +37,160 @@ export default function Shell({ user, theme, notify, onLogout, onUpdate }) {
   const [booking, setBooking] = useState(null)
   const [credits, setCredits] = useState(1500)
   const [prefs, setPrefs] = useState({ notif: true, lock: false })
+  const [stateLoaded, setStateLoaded] = useState(false)
+  const [canPersist, setCanPersist] = useState(false)
   const [now, setNow] = useState(Date.now())
   const live = useRef({}); live.current = { tab, openId, prefs, saved, threads }
   const fired = useRef(new Set())
+
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      if (!supabase || !user.id) {
+        notify('Database is not configured. Add the Supabase URL and anon key.')
+        setStateLoaded(true)
+        return
+      }
+      const { error: ensureProfileError } = await supabase.rpc('ensure_my_profile')
+      if (!active) return
+      if (ensureProfileError) {
+        notify(`Could not create your profile: ${ensureProfileError.message}. Apply the latest Supabase migration and try again.`)
+        setStateLoaded(true)
+        return
+      }
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('display_name, account_type, headline, avatar')
+        .eq('id', user.id)
+        .single()
+      if (!active) return
+      if (profileError) {
+        notify(`Could not load your profile: ${profileError.message}`)
+        setStateLoaded(true)
+        return
+      }
+      let avatar = parseAvatar(profile.avatar)
+      if (!avatar) {
+        try {
+          const cachedAvatar = localStorage.getItem(`ch-avatar:${user.id}`)
+          if (cachedAvatar) avatar = JSON.parse(cachedAvatar)
+        } catch (error) {
+          notify(`Could not restore the local avatar backup: ${error.message}`)
+        }
+      }
+      onUpdate({
+        ...user,
+        name: profile.display_name,
+        role: profile.account_type,
+        headline: profile.headline || '',
+        avatar,
+      })
+
+      const { data: record, error: stateError } = await supabase
+        .from('app_state')
+        .select('state')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      if (!active) return
+      if (stateError) {
+        notify(`Profile loaded, but saved sessions and messages could not be loaded: ${stateError.message}`)
+        setStateLoaded(true)
+        return
+      }
+      if (record?.state) {
+        if (Array.isArray(record.state.saved)) setSaved(record.state.saved)
+        if (Array.isArray(record.state.sessions)) setSessions(record.state.sessions)
+        if (Array.isArray(record.state.threads)) setThreads(record.state.threads)
+      }
+      setCanPersist(true)
+      setStateLoaded(true)
+    }
+    load().catch((error) => {
+      if (!active) return
+      notify(`Could not load your saved data: ${error.message}`)
+      setStateLoaded(true)
+    })
+    return () => { active = false }
+  }, [user.id])
+
+  useEffect(() => {
+    if (!canPersist || !stateLoaded || !supabase) return
+    const timer = setTimeout(async () => {
+      try {
+        const { error } = await supabase.from('app_state').upsert({
+          user_id: user.id,
+          state: { saved, sessions, threads },
+        }, { onConflict: 'user_id' })
+        if (error) notify(`Could not save your data: ${error.message}`)
+      } catch (error) {
+        notify(`Could not save your data: ${error.message || 'Network request failed.'}`)
+      }
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [canPersist, stateLoaded, user.id, saved, sessions, threads, notify])
+
+  const updateProfile = async (nextUser) => {
+    if (!supabase) {
+      notify('Supabase is not configured.')
+      return false
+    }
+    let profileSaved = false
+    try {
+      const { data: savedProfile, error } = await supabase.rpc('update_my_profile', {
+        p_display_name: nextUser.name,
+        p_headline: nextUser.headline || '',
+        p_avatar: nextUser.avatar || null,
+      })
+      if (error) {
+        notify(`Could not save your profile: ${error.message}`)
+        return false
+      }
+      profileSaved = true
+      if (!savedProfile || typeof savedProfile !== 'object' || Array.isArray(savedProfile)) {
+        notify('Profile update was sent, but Supabase returned no profile to verify. Check that the latest profile RPC migration is applied.')
+        return false
+      }
+      const savedAvatar = parseAvatar(savedProfile.avatar)
+      const avatarMatches = nextUser.avatar
+        ? nextUser.avatar.type === 'photo'
+          ? savedAvatar?.type === 'photo' && savedAvatar.src === nextUser.avatar.src
+          : savedAvatar?.type === 'emoji'
+            && savedAvatar.e === nextUser.avatar.e
+            && savedAvatar.bg === nextUser.avatar.bg
+        : !savedAvatar
+      if (savedProfile.display_name !== nextUser.name
+        || savedProfile.headline !== (nextUser.headline || '')
+        || !avatarMatches) {
+        notify('Supabase did not retain the profile update. Check that the latest profile migrations are applied.')
+        return false
+      }
+      try {
+        if (nextUser.avatar) localStorage.setItem(`ch-avatar:${user.id}`, JSON.stringify(nextUser.avatar))
+        else localStorage.removeItem(`ch-avatar:${user.id}`)
+      } catch (error) {
+        notify(`Profile saved to Supabase, but the local avatar backup failed: ${error.message}`)
+      }
+
+      let updated = nextUser
+      if (nextUser.email !== user.email) {
+        const { data, error: authError } = await supabase.auth.updateUser({ email: nextUser.email })
+        if (authError) {
+          notify(`Profile saved, but the email could not be changed: ${authError.message}`)
+          return false
+        }
+        updated = { ...nextUser, email: data.user?.email || user.email }
+        if (updated.email === user.email) notify('Confirm the email change using the link we sent you.')
+      }
+      onUpdate(updated)
+      return true
+    } catch (error) {
+      notify(profileSaved
+        ? `Profile saved, but a follow-up request failed: ${error.message || 'Network request failed.'}`
+        : `Could not save your profile: ${error.message || 'Network request failed.'}`)
+      return false
+    }
+  }
+
   useEffect(() => { window.scrollTo(0, 0) }, [tab])
   useEffect(() => { const i = setInterval(() => setNow(Date.now()), 15000); return () => clearInterval(i) }, [])
 
@@ -122,6 +285,8 @@ export default function Shell({ user, theme, notify, onLogout, onUpdate }) {
     </button>
   ))
 
+  if (!stateLoaded) return <main className="wrap" aria-live="polite">Loading your account…</main>
+
   return (
     <div className="shell">
       <aside className="side">
@@ -148,7 +313,7 @@ export default function Shell({ user, theme, notify, onLogout, onUpdate }) {
           {tab === 'sessions' && <Sessions sessions={liveSessions} setSessions={setSessions} onResched={reschedule} notify={notify} />}
           {tab === 'messages' && <Messages threads={threads} openId={openId} setOpenId={setOpenId} onOpen={openThread} onSend={send} typing={typing} />}
           {tab === 'saved' && <Saved saved={saved} onSave={onSave} onBook={setBooking} goHome={() => setTab('home')} />}
-          {tab === 'profile' && <Profile user={user} stats={stats} credits={credits} theme={theme} prefs={prefs} setPrefs={setPrefs} onUpdate={onUpdate} onTopUp={topUp} onLogout={onLogout} notify={notify} />}
+          {tab === 'profile' && <Profile user={user} stats={stats} credits={credits} theme={theme} prefs={prefs} setPrefs={setPrefs} onUpdate={updateProfile} onTopUp={topUp} onLogout={onLogout} notify={notify} />}
         </main>
       </div>
 
