@@ -80,7 +80,7 @@ export default function Profile({ user, stats, credits, theme, prefs, setPrefs, 
     { i: 'bell', t: 'Notifications', s: 'Session reminders, messages, picks for you', sw: prefs.notif, toggle: () => { if (!prefs.notif) askNotifPermission(); setPrefs({ ...prefs, notif: !prefs.notif }) } },
     { i: 'lock', t: 'App lock', s: 'Ask for biometrics on open', sw: prefs.lock, toggle: () => setPrefs({ ...prefs, lock: !prefs.lock }) },
     { i: 'shield', t: 'Privacy & Security', s: 'Data and account safety', go: () => notify('Privacy settings coming soon') },
-    { i: 'help', t: 'Help & Support', s: 'FAQs and live chat', go: () => notify('Support: help@consulthub.app') },
+    { i: 'help', t: 'Help & Support', s: 'FAQs and live chat', go: () => notify('Support: help@EduMen.app') },
   ]
   return (
     <div className="pf">

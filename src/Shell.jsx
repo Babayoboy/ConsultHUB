@@ -102,7 +102,7 @@ export default function Shell({ user, theme, notify, onLogout, onUpdate }) {
   const unread = threads.reduce((n, t) => n + t.unread, 0)
   const unseen = notifs.filter((n) => !n.read).length
   useEffect(() => {
-    document.title = (unread + unseen ? `(${unread + unseen}) ` : '') + 'ConsultHub: book an hour with an expert'
+    document.title = (unread + unseen ? `(${unread + unseen}) ` : '') + 'EduMen: book an hour with an expert'
     try { unread ? navigator.setAppBadge?.(unread) : navigator.clearAppBadge?.() } catch (e) {}
   }, [unread, unseen])
 

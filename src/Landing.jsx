@@ -76,7 +76,7 @@ export default function Landing({ theme, notify, onAuth }) {
       <section className="s"><div className="wrap">
         <div className="cta"><h2>Know your field well? Get paid to share it.</h2><button className="btn" onClick={() => toAuth('signup', 'Choose "Give advice" to become an expert')}>Sign up as an expert</button></div>
       </div></section>
-      <footer><div className="wrap"><span>© 2026 ConsultHub</span><span>Terms · Privacy · Help</span></div></footer>
+      <footer><div className="wrap"><span>© 2026 EduMen</span><span>Terms · Privacy · Help</span></div></footer>
     </>
   )
 }

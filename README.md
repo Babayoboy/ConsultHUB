@@ -1,4 +1,4 @@
-# ConsultHub (React + Vite, front-end only)
+# EduMen (React + Vite, front-end only)
 
     npm install
     npm run dev      # http://localhost:5173

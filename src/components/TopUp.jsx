@@ -3,7 +3,7 @@ import Sheet from './Sheet.jsx'
 import Icon from './Icon.jsx'
 
 // Replace with your real merchant VPA / gateway ids when a backend exists.
-export const MERCHANT = { name: 'ConsultHub', vpa: 'consulthub@upi' }
+export const MERCHANT = { name: 'EduMen', vpa: 'EduMen@upi' }
 const inr = (n) => '₹' + n.toLocaleString('en-IN')
 const AMTS = [500, 1000, 2000, 5000]
 const ua = navigator.userAgent
@@ -15,8 +15,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 const GPAY = { supportedMethods: 'https://google.com/pay', data: { environment: 'TEST', apiVersion: 2, apiVersionMinor: 0, merchantInfo: { merchantName: MERCHANT.name },
   allowedPaymentMethods: [{ type: 'CARD', parameters: { allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'], allowedCardNetworks: ['VISA', 'MASTERCARD'] },
     tokenizationSpecification: { type: 'PAYMENT_GATEWAY', parameters: { gateway: 'example', gatewayMerchantId: 'exampleGatewayMerchantId' } } }] } }
-const payReq = (amt) => new PaymentRequest([GPAY], { total: { label: 'ConsultHub credits', amount: { currency: 'INR', value: String(amt) } } })
-const upiQuery = (amt, tr) => `pa=${MERCHANT.vpa}&pn=${encodeURIComponent(MERCHANT.name)}&am=${amt}&cu=INR&tn=${encodeURIComponent('ConsultHub credits')}&tr=${tr}`
+const payReq = (amt) => new PaymentRequest([GPAY], { total: { label: 'EduMen credits', amount: { currency: 'INR', value: String(amt) } } })
+const upiQuery = (amt, tr) => `pa=${MERCHANT.vpa}&pn=${encodeURIComponent(MERCHANT.name)}&am=${amt}&cu=INR&tn=${encodeURIComponent('EduMen credits')}&tr=${tr}`
 const luhn = (s) => { let t = 0, d = false; for (let i = s.length - 1; i >= 0; i--) { let n = +s[i]; if (d && (n *= 2) > 9) n -= 9; t += n; d = !d } return t % 10 === 0 }
 
 const Badge = ({ bg, fg = '#fff', children }) => <span className="pb" style={{ background: bg, color: fg }}>{children}</span>
